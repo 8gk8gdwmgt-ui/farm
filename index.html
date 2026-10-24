@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>养殖记账本 — 牛羊管理</title>
+<!-- PWA:安装到主屏幕支持(部署到 http(s) 后生效,本地 file:// 打开时静默忽略) -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon192.png">
+<link rel="apple-touch-icon" href="icon192.png">
+<meta name="theme-color" content="#2f6b3a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+/* ==================== 一、设计变量 ==================== */
+:root {
+  /* 文字:主文字/次要文字(均保证对比度 ≥7:1,老年用户可读) */
+  --ink: #33322f;
+  --ink-soft: #52514e;
+  /* 表面 */
+  --bg: #f4f3ee;
+  --surface: #fcfcfb;
+  --border: #dcdbd2;
+  /* 数据色(固定跟随实体,绝不随排序/筛选变化;已按 dataviz 规范验证) */
+  --income: #008300;
+  --expense: #e34948;
+  --cattle: #2a78d6;
+  --sheep: #eb6834;
+  /* 品牌/操作色 */
+  --primary: #2f6b3a;
+  --primary-dark: #275c32;
+  --danger: #c03a39;
+  /* 环形图支出类别 5 色(固定顺序:饲料/疫苗药品/人工/水电/其他支出) */
+  --cat-feed: #1baf7a;
+  --cat-medicine: #eda100;
+  --cat-labor: #e87ba4;
+  --cat-utility: #008300;
+  --cat-other: #4a3aa7;
+  /* 网格线 / 图表画布 */
+  --gridline: #e1e0d9;
+  --chartbg: #fcfcfb;
+  /* 尺寸 */
+  --radius-card: 14px;
+  --radius-btn: 10px;
+  --btn-h: 54px;
+  --font-base: 18px;
+}
+
+/* ==================== 二、基础样式 ==================== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: var(--font-base);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+input, select { font: inherit; color: inherit; }
+.hidden { display: none !important; }
+
+/* 通用按钮 */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--btn-h); padding: 10px 22px;
+  border-radius: var(--radius-btn); border: 2px solid var(--border);
+  background: var(--surface); color: var(--ink);
+  font-size: 19px; font-weight: 600;
+  user-select: none; -webkit-user-select: none;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:active { background: var(--primary-dark); }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-block { width: 100%; }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* 卡片 */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-card); padding: 20px; margin-bottom: 18px;
+}
+.card h2 { font-size: 22px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.card h3 { font-size: 18px; margin-bottom: 10px; color: var(--ink-soft); font-weight: 600; }
+
+/* 表单 */
+.field { margin-bottom: 18px; }
+.field label { display: block; font-size: 17px; font-weight: 600; margin-bottom: 8px; color: var(--ink-soft); }
+.input, select.input {
+  width: 100%; min-height: 52px; padding: 10px 14px;
+  font-size: 20px; /* ≥20px 防 iOS 聚焦自动放大 */
+  border: 2px solid var(--border); border-radius: var(--radius-btn);
+  background: var(--surface); outline: none;
+}
+.input:focus { border-color: var(--primary); }
+input[type="date"].input { min-height: 52px; }
+.amount-input { font-size: 26px; font-weight: 700; }
+
+/* 选项按钮组(收/支、牛/羊、归属、变动类型) */
+.opt-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.opt {
+  flex: 1 1 auto; min-width: 110px; min-height: 58px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 16px; font-size: 19px; font-weight: 600;
+  border: 2px solid var(--border); border-radius: var(--radius-btn);
+  background: var(--surface);
+  user-select: none; -webkit-user-select: none;
+}
+.opt:active { transform: scale(0.97); }
+.opt.active { border-color: var(--ink); background: #ecece6; }
+.opt.opt-income.active { border-color: var(--income); background: #e6f2e6; }
+.opt.opt-expense.active { border-color: var(--expense); background: #fce9e9; }
+.opt.opt-cattle.active { border-color: var(--cattle); background: #e8effb; }
+.opt.opt-sheep.active { border-color: var(--sheep); background: #fdefe8; }
+.opt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+
+/* 分段控件 */
+.seg { display: flex; background: #e9e8e1; border-radius: 12px; padding: 4px; margin-bottom: 20px; }
+.seg button {
+  flex: 1; min-height: 52px; border: none; border-radius: 9px;
+  background: transparent; font-size: 19px; font-weight: 700;
+}
+.seg button.active { background: var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+
+/* 徽章 */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+}
+.badge-cattle { background: #e8effb; color: #1e5ea8; }
+.badge-sheep { background: #fdefe8; color: #c2541e; }
+.badge-shared { background: #ecece6; color: var(--ink-soft); }
+
+/* toast */
+#toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(20px);
+  background: #33322f; color: #fff; padding: 12px 26px; border-radius: 999px;
+  font-size: 18px; font-weight: 600; opacity: 0; pointer-events: none;
+  transition: opacity .25s, transform .25s; z-index: 100;
+  max-width: 90vw; text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* localStorage 不可用警示条 */
+#storage-warning {
+  background: var(--danger); color: #fff; text-align: center;
+  padding: 10px 16px; font-size: 17px; font-weight: 600;
+}
+
+/* ==================== 三、布局:侧边栏 / 主区 / 底部Tab ==================== */
+#sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: 230px;
+  background: var(--surface); border-right: 1px solid var(--border);
+  padding: 22px 14px; display: flex; flex-direction: column; gap: 6px;
+  z-index: 10;
+}
+#sidebar .logo {
+  font-size: 24px; font-weight: 800; padding: 4px 12px 20px;
+  display: flex; align-items: center; gap: 10px;
+}
+#sidebar button, #tabbar button {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 54px; padding: 10px 16px; border: none; border-radius: 10px;
+  background: transparent; font-size: 19px; font-weight: 600; text-align: left;
+}
+#sidebar button .nav-icon, #tabbar button .nav-icon { font-size: 22px; }
+#sidebar button.active { background: #eaf1e6; color: var(--primary-dark); }
+
+main { margin-left: 230px; padding: 24px 28px 60px; max-width: 1040px; }
+
+.view { display: none; }
+.view.active { display: block; }
+
+/* 手机底部 Tab */
+#tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: none; grid-template-columns: repeat(5, 1fr);
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+#tabbar button {
+  flex-direction: column; gap: 2px; min-height: 62px; padding: 6px 2px;
+  font-size: 13px; justify-content: center; text-align: center; border-radius: 0;
+}
+#tabbar button.active { color: var(--primary-dark); background: #eaf1e6; }
+
+@media (max-width: 768px) {
+  #sidebar { display: none; }
+  main { margin-left: 0; padding: 16px 14px 96px; }
+  #tabbar { display: grid; }
+  body { font-size: 17px; }
+}
+
+/* ==================== 四、各视图组件 ==================== */
+/* 概览 */
+.hero-stock {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-card); padding: 26px 20px; margin-bottom: 18px;
+  text-align: center;
+}
+.hero-stock .label { font-size: 19px; color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
+.hero-stock .figures { display: flex; justify-content: center; flex-wrap: wrap; gap: 30px; }
+.hero-stock .figure { font-size: 46px; font-weight: 800; line-height: 1.2; }
+.hero-stock .figure small { font-size: 20px; font-weight: 600; color: var(--ink-soft); }
+.hero-stock .figure .num { font-variant-numeric: tabular-nums; }
+.hero-stock .figure.cattle .num { color: var(--cattle); }
+.hero-stock .figure.sheep .num { color: var(--sheep); }
+
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px 16px; }
+.kpi .k-label { font-size: 16px; font-weight: 600; color: var(--ink-soft); }
+.kpi .k-value { font-size: 30px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.kpi.k-income .k-value { color: var(--income); }
+.kpi.k-expense .k-value { color: var(--expense); }
+.kpi.k-profit .k-value { color: var(--primary); }
+.kpi.k-loss .k-value { color: var(--expense); }
+@media (max-width: 768px) { .kpi-row { grid-template-columns: 1fr; } .kpi .k-value { font-size: 26px; } }
+
+.quick-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+@media (max-width: 768px) { .quick-row { grid-template-columns: 1fr; } }
+.quick-btn { font-size: 20px; min-height: 76px; font-weight: 700; }
+
+/* 备份提醒条 */
+#backup-reminder {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: #fdf3d7; border: 1px solid #e8cf8a; color: #6b4e10;
+  border-radius: var(--radius-card); padding: 14px 18px; margin-bottom: 18px;
+  font-weight: 600; font-size: 17px;
+}
+#backup-reminder .btn { min-height: 44px; font-size: 16px; padding: 6px 16px; }
+
+/* 记录列表 */
+.filter-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.filter-bar select { min-width: 150px; }
+.sum-row {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 12px 16px; background: #eef0ea; border-radius: 10px;
+  margin-bottom: 12px; font-weight: 700; font-size: 17px;
+}
+.sum-row .sum-in { color: var(--income); }
+.sum-row .sum-out { color: var(--expense); }
+.sum-row .sum-net { color: var(--primary-dark); }
+
+.rec-list { list-style: none; }
+.rec-item {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
+}
+.rec-date { font-size: 15px; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 96px; }
+.rec-main { flex: 1; min-width: 160px; }
+.rec-title { font-size: 18px; font-weight: 700; }
+.rec-note { font-size: 15px; color: var(--ink-soft); margin-top: 2px; word-break: break-all; }
+.rec-amount { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rec-amount.in { color: var(--income); }
+.rec-amount.out { color: var(--expense); }
+.rec-del {
+  min-height: 44px; min-width: 44px; border: none; border-radius: 8px;
+  background: transparent; font-size: 18px; color: var(--ink-soft);
+}
+.rec-del:active { background: #f3e2e2; color: var(--danger); }
+.empty-tip { text-align: center; color: var(--ink-soft); padding: 36px 10px; font-size: 17px; }
+
+/* 统计页 */
+.stats-filter { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.stats-filter .nav-arrow {
+  min-width: 48px; min-height: 48px; border: 2px solid var(--border); border-radius: 10px;
+  background: var(--surface); font-size: 20px; font-weight: 700;
+}
+.stats-filter .nav-arrow:active { background: #ecece6; }
+.stats-filter .cur-label { font-size: 20px; font-weight: 800; min-width: 120px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* 表格 */
+.table-wrap { overflow-x: auto; }
+table.data { width: 100%; border-collapse: collapse; font-size: 16px; }
+table.data th, table.data td {
+  padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--gridline);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { color: var(--ink-soft); font-weight: 700; font-size: 15px; background: #f7f6f1; }
+table.data tr:last-child td { border-bottom: none; }
+table.data .td-pos { color: var(--income); font-weight: 700; }
+table.data .td-neg { color: var(--expense); font-weight: 700; }
+table.data tfoot td { font-weight: 800; border-top: 2px solid var(--ink-soft); }
+
+/* 设置页 */
+.setting-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.setting-row .desc { flex: 1; min-width: 200px; }
+.setting-row .desc b { display: block; font-size: 18px; }
+.setting-row .desc span { font-size: 15px; color: var(--ink-soft); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
+.help-text { font-size: 16px; color: var(--ink-soft); line-height: 1.8; }
+.help-text b { color: var(--ink); }
+.help-text li { margin-left: 20px; margin-bottom: 8px; }
+
+/* ==================== 五、图表 ==================== */
+.chart-card .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 12px; }
+.legend .lg-item { display: inline-flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 600; }
+.legend .lg-dot { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.legend .lg-line { width: 20px; height: 4px; border-radius: 2px; flex: none; }
+.chart-box { background: var(--chartbg); border: 1px solid var(--gridline); border-radius: 10px; padding: 12px 8px 6px; overflow-x: auto; }
+.chart-box svg { display: block; }
+.chart-empty { text-align: center; color: var(--ink-soft); padding: 40px 10px; font-size: 17px; }
+.chart-note { font-size: 14px; color: var(--ink-soft); margin-top: 10px; line-height: 1.7; }
+
+/* 悬浮提示 */
+#chart-tooltip {
+  position: fixed; z-index: 50; pointer-events: none;
+  background: #33322f; color: #fff; border-radius: 8px;
+  padding: 8px 12px; font-size: 15px; font-weight: 600; line-height: 1.5;
+  opacity: 0; transition: opacity .15s; max-width: 260px;
+}
+#chart-tooltip.show { opacity: 1; }
+#chart-tooltip .tt-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+#chart-tooltip .tt-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+</style>
+</head>
+<body>
+<div id="storage-warning" class="hidden">⚠️ 当前浏览器无法保存数据(可能开启了无痕模式),记账会丢失,请更换浏览器使用!</div>
+
+<aside id="sidebar">
+  <div class="logo">🐄 养殖记账本</div>
+  <button class="nav-btn" data-view="dashboard"><span class="nav-icon">🏠</span>概览</button>
+  <button class="nav-btn" data-view="entry"><span class="nav-icon">✍️</span>记一笔</button>
+  <button class="nav-btn" data-view="records"><span class="nav-icon">📋</span>记录</button>
+  <button class="nav-btn" data-view="stats"><span class="nav-icon">📊</span>统计</button>
+  <button class="nav-btn" data-view="settings"><span class="nav-icon">⚙️</span>设置</button>
+</aside>
+
+<main>
+  <!-- ===== 概览 ===== -->
+  <section id="view-dashboard" class="view">
+    <div class="hero-stock">
+      <div class="label">现在存栏</div>
+      <div class="figures">
+        <div class="figure cattle">🐂 牛 <span class="num" id="dash-cattle">0</span> <small>头</small></div>
+        <div class="figure sheep">🐑 羊 <span class="num" id="dash-sheep">0</span> <small>只</small></div>
+      </div>
+    </div>
+    <div id="backup-reminder" class="hidden">
+      <span>⚠️ 距上次备份已超过 30 天,请尽快备份数据!</span>
+      <button class="btn" id="reminder-backup-btn">去备份</button>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi k-income"><div class="k-label">本月收入 💰</div><div class="k-value" id="dash-income">¥0.00</div></div>
+      <div class="kpi k-expense"><div class="k-label">本月支出 💸</div><div class="k-value" id="dash-expense">¥0.00</div></div>
+      <div class="kpi k-profit"><div class="k-label">本月利润 📈</div><div class="k-value" id="dash-profit">¥0.00</div></div>
+    </div>
+    <div class="quick-row">
+      <button class="btn quick-btn" id="quick-expense">💸 记一笔支出</button>
+      <button class="btn quick-btn" id="quick-income">💰 记一笔收入</button>
+      <button class="btn quick-btn" id="quick-stock">🐄 记数量变动</button>
+    </div>
+    <div class="card">
+      <h2>📋 最近记录</h2>
+      <h3>最近收支</h3>
+      <ul class="rec-list" id="dash-recent-tx"></ul>
+      <h3 style="margin-top:16px">最近数量变动</h3>
+      <ul class="rec-list" id="dash-recent-stock"></ul>
+    </div>
+  </section>
+
+  <!-- ===== 记一笔 ===== -->
+  <section id="view-entry" class="view">
+    <div class="card">
+      <div class="seg" id="entry-seg">
+        <button class="active" data-seg="money">💸 记收支</button>
+        <button data-seg="stock">🐄 记数量</button>
+      </div>
+
+      <!-- 收支面板 -->
+      <div id="entry-money">
+        <div class="field">
+          <label>这是…</label>
+          <div class="opt-row">
+            <button class="opt opt-income" data-tx="income">💰 收钱</button>
+            <button class="opt opt-expense active" data-tx="expense">💸 花钱</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>日期</label>
+          <input type="date" class="input" id="tx-date">
+        </div>
+        <div class="field">
+          <label>类别</label>
+          <div class="opt-grid" id="tx-cats"></div>
+        </div>
+        <div class="field">
+          <label>金额(元)</label>
+          <input type="text" class="input amount-input" id="tx-amount" inputmode="decimal" placeholder="0.00" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>这笔钱是…</label>
+          <div class="opt-row" id="tx-attrs">
+            <button class="opt opt-cattle" data-attr="cattle">🐂 牛的</button>
+            <button class="opt opt-sheep" data-attr="sheep">🐑 羊的</button>
+            <button class="opt opt-shared active" data-attr="shared">🤝 共用</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>备注(可选)</label>
+          <input type="text" class="input" id="tx-note" placeholder="比如:买玉米饲料500斤" autocomplete="off">
+        </div>
+        <button class="btn btn-primary btn-block" id="tx-save" style="font-size:22px">保存 ✅</button>
+      </div>
+
+      <!-- 数量面板 -->
+      <div id="entry-stock" class="hidden">
+        <div class="field">
+          <label>哪种动物?</label>
+          <div class="opt-row">
+            <button class="opt opt-cattle active" data-species="cattle">🐂 牛</button>
+            <button class="opt opt-sheep" data-species="sheep">🐑 羊</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>发生了什么事?</label>
+          <div class="opt-row" id="st-types">
+            <button class="opt" data-st="buy">🛒 购入</button>
+            <button class="opt" data-st="birth">🐣 出生</button>
+            <button class="opt" data-st="sale">💵 出售</button>
+            <button class="opt" data-st="death">🪦 死亡/淘汰</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>日期</label>
+          <input type="date" class="input" id="st-date">
+        </div>
+        <div class="field">
+          <label>数量(头/只)</label>
+          <input type="text" class="input amount-input" id="st-qty" inputmode="numeric" placeholder="1" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>备注(可选)</label>
+          <input type="text" class="input" id="st-note" placeholder="比如:买3头小牛" autocomplete="off">
+        </div>
+        <button class="btn btn-primary btn-block" id="st-save" style="font-size:22px">保存 ✅</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 记录 ===== -->
+  <section id="view-records" class="view">
+    <div class="seg" id="records-seg">
+      <button class="active" data-rseg="tx">💸 收支记录</button>
+      <button data-rseg="stock">🐄 数量记录</button>
+    </div>
+    <div class="card">
+      <div class="filter-bar">
+        <label style="font-weight:700">筛选月份:</label>
+        <select class="input" id="rec-month-filter" style="width:auto;min-height:48px"></select>
+        <span style="flex:1"></span>
+      </div>
+      <div id="rec-sum"></div>
+      <ul class="rec-list" id="rec-list"></ul>
+    </div>
+  </section>
+
+  <!-- ===== 统计 ===== -->
+  <section id="view-stats" class="view">
+    <div class="stats-filter">
+      <div class="seg" id="stats-mode-seg" style="margin:0;max-width:280px">
+        <button class="active" data-mode="month">按月</button>
+        <button data-mode="year">按年</button>
+      </div>
+      <button class="nav-arrow" id="stats-prev-year">◀</button>
+      <span class="cur-label" id="stats-year-label">2026 年</span>
+      <button class="nav-arrow" id="stats-next-year">▶</button>
+      <span class="hidden" id="stats-month-ctl">
+        <button class="nav-arrow" id="stats-prev-month">◀</button>
+        <span class="cur-label" id="stats-month-label">10 月</span>
+        <button class="nav-arrow" id="stats-next-month">▶</button>
+      </span>
+    </div>
+
+    <div class="kpi-row" id="stats-kpi-row"></div>
+
+    <div class="card chart-card">
+      <h2>📊 每月收支(全年)</h2>
+      <div class="legend" id="bar-legend"></div>
+      <div class="chart-box" id="bar-chart"></div>
+      <table class="data" id="bar-table" style="margin-top:12px"></table>
+    </div>
+
+    <div class="card chart-card">
+      <h2>📈 每月末存栏趋势(全年)</h2>
+      <div class="legend" id="line-legend"></div>
+      <div class="chart-box" id="line-chart"></div>
+      <table class="data" id="line-table" style="margin-top:12px"></table>
+    </div>
+
+    <div class="card chart-card">
+      <h2>🍩 支出构成</h2>
+      <div class="legend" id="donut-legend"></div>
+      <div class="chart-box" id="donut-chart"></div>
+      <table class="data" id="donut-table" style="margin-top:12px"></table>
+    </div>
+
+    <div class="card">
+      <h2>🐂🐑 牛和羊的利润</h2>
+      <table class="data" id="profit-table"></table>
+      <p class="chart-note" id="alloc-note"></p>
+    </div>
+  </section>
+
+  <!-- ===== 设置 ===== -->
+  <section id="view-settings" class="view">
+    <div class="card">
+      <h2>💾 数据备份(重要!)</h2>
+      <div class="setting-row">
+        <div class="desc"><b>下载备份文件</b><span id="last-backup-label">把全部数据存成一个文件,建议每月备份一次,存到手机或网盘</span></div>
+        <button class="btn btn-primary" id="backup-btn">下载备份 📥</button>
+      </div>
+      <div class="setting-row">
+        <div class="desc"><b>恢复备份</b><span>选择之前下载的备份文件,覆盖当前全部数据(会先二次确认)</span></div>
+        <button class="btn" id="restore-btn">恢复备份 📤</button>
+        <input type="file" id="restore-file" accept=".json,application/json" class="hidden">
+      </div>
+      <hr class="divider">
+      <h2>📄 导出表格(Excel 可打开)</h2>
+      <div class="setting-row">
+        <div class="desc"><b>导出收支记录 CSV</b><span>发给别人看或用 Excel 继续处理,中文正常显示</span></div>
+        <button class="btn" id="export-tx-btn">导出收支 📄</button>
+      </div>
+      <div class="setting-row">
+        <div class="desc"><b>导出数量记录 CSV</b><span>同上</span></div>
+        <button class="btn" id="export-st-btn">导出数量 📄</button>
+      </div>
+      <hr class="divider">
+      <h2>🧪 其他</h2>
+      <div class="setting-row">
+        <div class="desc"><b>填入示例数据</b><span>先填几条假数据练练手,熟悉后再清空</span></div>
+        <button class="btn" id="sample-btn">填入示例数据 🧪</button>
+      </div>
+      <div class="setting-row">
+        <div class="desc"><b>清空所有数据</b><span>⚠️ 不可恢复!操作前请先下载备份</span></div>
+        <button class="btn btn-danger" id="clear-btn">清空所有数据 🗑️</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📖 使用说明</h2>
+      <ul class="help-text">
+        <li><b>数据存在哪里?</b>存在<b>本机浏览器的存储</b>里,不需要联网。但换电脑、换浏览器、清理浏览器缓存都会导致数据消失,所以请<b>每月在"设置"里下载一次备份文件</b>,存到手机或网盘。</li>
+        <li><b>微信里打不开这个网页</b>。请用电脑双击文件打开;手机上请把文件存到手机里,用浏览器 App(安卓的 Chrome 或 Edge)打开。</li>
+        <li><b>共用支出怎么分到牛和羊?</b>按那个月<b>月底的存栏数量比例</b>分摊。比如月底牛 10 头、羊 20 只,共用支出 300 元,牛摊 100 元、羊摊 200 元。</li>
+        <li><b>存栏数量怎么算的?</b>购入、出生是加,出售、死亡/淘汰是减,网站自动累加,不用自己算。</li>
+        <li><b>怎么改错?</b>在"记录"页找到那条记录,点右侧的 🗑️ 删除,再重新记一条。</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<nav id="tabbar">
+  <button class="nav-btn" data-view="dashboard"><span class="nav-icon">🏠</span>概览</button>
+  <button class="nav-btn" data-view="entry"><span class="nav-icon">✍️</span>记一笔</button>
+  <button class="nav-btn" data-view="records"><span class="nav-icon">📋</span>记录</button>
+  <button class="nav-btn" data-view="stats"><span class="nav-icon">📊</span>统计</button>
+  <button class="nav-btn" data-view="settings"><span class="nav-icon">⚙️</span>设置</button>
+</nav>
+
+<div id="toast"></div>
+<div id="chart-tooltip"></div>
+
+<script>
+'use strict';
+/* ===== 零、本文件说明 =====
+   养殖记账本 —— 单文件应用,双击 index.html 即可使用,无需联网。
+   数据存在浏览器 localStorage,请定期在"设置"页备份! */
+
+/* ==================== 一、常量 ==================== */
+const STORAGE_KEY = 'farm-manager-data-v1';
+
+/* 收支类别(存 id 不存中文名,改名只改这里) */
+const CATEGORIES = {
+  expense: [
+    { id: 'feed',          name: '饲料',     suggestAttribution: 'shared' },
+    { id: 'medicine',      name: '疫苗药品', suggestAttribution: 'shared' },
+    { id: 'labor',         name: '人工',     suggestAttribution: 'shared' },
+    { id: 'utility',       name: '水电',     suggestAttribution: 'shared' },
+    { id: 'other_expense', name: '其他支出', suggestAttribution: 'shared' }
+  ],
+  income: [
+    { id: 'sell_cattle',  name: '卖牛', suggestAttribution: 'cattle' },
+    { id: 'sell_sheep',   name: '卖羊', suggestAttribution: 'sheep'  },
+    { id: 'sell_wool',    name: '卖毛', suggestAttribution: 'sheep'  },
+    { id: 'sell_milk',    name: '卖奶', suggestAttribution: 'sheep'  },
+    { id: 'other_income', name: '其他收入', suggestAttribution: 'shared' }
+  ]
+};
+function catName(type, id) {
+  const c = CATEGORIES[type].find(x => x.id === id);
+  return c ? c.name : '(未知类别)';
+}
+
+/* 数量变动类型(quantity 只存绝对值,正负号由 sign 决定) */
+const STOCK_CHANGE_TYPES = {
+  buy:   { name: '购入',     sign: +1 },
+  birth: { name: '出生',     sign: +1 },
+  sale:  { name: '出售',     sign: -1 },
+  death: { name: '死亡/淘汰', sign: -1 }
+};
+
+/* 颜色(已按 dataviz 规范验证通过,固定跟随实体) */
+const COLORS = {
+  income: '#008300', expense: '#e34948',
+  cattle: '#2a78d6', sheep: '#eb6834',
+  ink: '#52514e', gridline: '#e1e0d9', chartbg: '#fcfcfb'
+};
+/* 环形图:5 个支出类别固定色(顺序与 CATEGORIES.expense 一致) */
+const EXPENSE_CAT_COLORS = {
+  feed: '#1baf7a', medicine: '#eda100', labor: '#e87ba4',
+  utility: '#008300', other_expense: '#4a3aa7'
+};
+
+const ATTRIBUTION_NAMES = { cattle: '牛的', sheep: '羊的', shared: '共用' };
+
+/* ==================== 二、state 与 localStorage 读写 ==================== */
+let storageOK = true;   // localStorage 是否可用(无痕模式可能被禁)
+
+function emptyState() {
+  return { version: 1, transactions: [], stockEvents: [], settings: { lastBackupAt: null } };
+}
+
+function probeStorage() {
+  try {
+    const k = '__farm_probe__';
+    localStorage.setItem(k, '1');
+    localStorage.removeItem(k);
+    return true;
+  } catch (e) { return false; }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyState();
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.transactions) ||
+        !Array.isArray(parsed.stockEvents) || !parsed.settings) {
+      return emptyState();   // 数据形状不对,当作新账本
+    }
+    parsed.settings = Object.assign({ lastBackupAt: null }, parsed.settings);
+    return parsed;
+  } catch (e) {
+    storageOK = false;
+    return emptyState();
+  }
+}
+
+function saveState() {
+  if (!storageOK) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    storageOK = false;
+    showStorageWarning();
+  }
+}
+
+function showStorageWarning() {
+  const el = document.getElementById('storage-warning');
+  if (el) el.classList.remove('hidden');
+}
+
+let state = loadState();
+
+/* ==================== 三、工具 ==================== */
+function createId(prefix) {
+  const rand = Math.random().toString(36).slice(2, 6);
+  return prefix + '_' + Date.now() + '_' + rand;
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function todayStr() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + m + '-' + day;
+}
+
+/* 金额:千分位 + 2 位小数 */
+function fmtMoney(n) {
+  const neg = n < 0;
+  const s = Math.abs(round2(n)).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (neg ? '-¥' : '¥') + s;
+}
+
+/* 图表轴刻度:≥1 万显示"1.2万" */
+function fmtCompact(n) {
+  if (Math.abs(n) >= 10000) {
+    return (round2(n / 10000) + '').replace(/\.?0+$/, '') + '万';
+  }
+  return String(n);
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function isValidDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+/* 月份列表(从记录中推导,去重倒序),供筛选下拉使用 */
+function monthList() {
+  const set = new Set();
+  state.transactions.forEach(t => set.add(t.date.slice(0, 7)));
+  state.stockEvents.forEach(e => set.add(e.date.slice(0, 7)));
+  return Array.from(set).sort().reverse();
+}
+
+function ymLabel(ym) {
+  const [y, m] = ym.split('-');
+  return Number(y) + ' 年 ' + Number(m) + ' 月';
+}
+
+/* ==================== 四、数据操作 ==================== */
+function addTransaction(rec) {
+  state.transactions.push(rec);
+  saveState();
+}
+
+function deleteTransaction(id) {
+  state.transactions = state.transactions.filter(t => t.id !== id);
+  saveState();
+}
+
+function addStockEvent(ev) {
+  state.stockEvents.push(ev);
+  saveState();
+}
+
+function deleteStockEvent(id) {
+  state.stockEvents = state.stockEvents.filter(e => e.id !== id);
+  saveState();
+}
+/* ==================== 五、统计计算 ==================== */
+/* 某日期的存栏量 = 该日期(含当天)之前全部变动的符号×数量求和。
+   dateStr 用 'YYYY-MM-DD' 定长字符串比较;
+   月末上界用 `${ym}-31`(不是真实日期,但字符串比较下是安全的月末上界)。 */
+function stockAt(species, dateStr) {
+  return state.stockEvents
+    .filter(e => e.species === species && e.date <= dateStr)
+    .reduce((s, e) => s + STOCK_CHANGE_TYPES[e.changeType].sign * e.quantity, 0);
+}
+function currentStock(species) { return stockAt(species, '9999-12-31'); }
+
+/* 某月汇总。共用支出按该月"月末存栏比例"分摊到牛/羊。 */
+function monthSummary(ym) {
+  const sum = {
+    ym: ym,
+    incomeCattle: 0, incomeSheep: 0, incomeShared: 0,
+    expenseCattle: 0, expenseSheep: 0, expenseShared: 0
+  };
+  state.transactions.forEach(t => {
+    if (t.date.slice(0, 7) !== ym) return;
+    const kind = t.type === 'income' ? 'income' : 'expense';
+    sum[kind + (t.attribution.charAt(0).toUpperCase() + t.attribution.slice(1))] += t.amount;
+  });
+  sum.incomeTotal = round2(sum.incomeCattle + sum.incomeSheep + sum.incomeShared);
+  sum.expenseTotal = round2(sum.expenseCattle + sum.expenseSheep + sum.expenseShared);
+  sum.profitTotal = round2(sum.incomeTotal - sum.expenseTotal);
+  sum.stockCattleEnd = stockAt('cattle', ym + '-31');
+  sum.stockSheepEnd = stockAt('sheep', ym + '-31');
+
+  const totalStock = sum.stockCattleEnd + sum.stockSheepEnd;
+  if (totalStock > 0) {
+    sum.cattleShare = round2(sum.expenseShared * sum.stockCattleEnd / totalStock);
+    sum.sheepShare = round2(sum.expenseShared - sum.cattleShare); // 减法保证两数之和恰等于原值
+    sum.unallocatedShared = 0;
+  } else {
+    // 无存栏时不硬摊,列"未分摊"
+    sum.cattleShare = 0; sum.sheepShare = 0;
+    sum.unallocatedShared = round2(sum.expenseShared);
+  }
+  sum.cattleProfit = round2(sum.incomeCattle - sum.expenseCattle - sum.cattleShare);
+  sum.sheepProfit = round2(sum.incomeSheep - sum.expenseSheep - sum.sheepShare);
+  // 恒等式:牛利润 + 羊利润 - 未分摊 === 总收入 - 总支出
+  console.assert(
+    Math.abs(sum.cattleProfit + sum.sheepProfit - sum.unallocatedShared - sum.profitTotal) < 0.01,
+    '利润恒等式不成立: ' + ym, sum
+  );
+  return sum;
+}
+
+/* 年度汇总 = 12 个月各自分摊后累加(共用支出按每月月末存栏逐月分摊)。 */
+function yearSummary(year) {
+  const y = String(year);
+  const acc = {
+    year: y,
+    incomeTotal: 0, expenseTotal: 0, profitTotal: 0,
+    incomeCattle: 0, incomeSheep: 0, incomeShared: 0,
+    expenseCattle: 0, expenseSheep: 0, expenseShared: 0,
+    cattleShare: 0, sheepShare: 0,
+    cattleProfit: 0, sheepProfit: 0, unallocatedShared: 0
+  };
+  for (let m = 1; m <= 12; m++) {
+    const ms = monthSummary(y + '-' + String(m).padStart(2, '0'));
+    acc.incomeTotal += ms.incomeTotal;
+    acc.expenseTotal += ms.expenseTotal;
+    acc.profitTotal += ms.profitTotal;
+    acc.incomeCattle += ms.incomeCattle;
+    acc.incomeSheep += ms.incomeSheep;
+    acc.incomeShared += ms.incomeShared;
+    acc.expenseCattle += ms.expenseCattle;
+    acc.expenseSheep += ms.expenseSheep;
+    acc.expenseShared += ms.expenseShared;
+    acc.cattleShare += ms.cattleShare;
+    acc.sheepShare += ms.sheepShare;
+    acc.cattleProfit += ms.cattleProfit;
+    acc.sheepProfit += ms.sheepProfit;
+    acc.unallocatedShared += ms.unallocatedShared;
+  }
+  acc.incomeTotal = round2(acc.incomeTotal);
+  acc.expenseTotal = round2(acc.expenseTotal);
+  acc.profitTotal = round2(acc.profitTotal);
+  acc.cattleProfit = round2(acc.cattleProfit);
+  acc.sheepProfit = round2(acc.sheepProfit);
+  acc.unallocatedShared = round2(acc.unallocatedShared);
+  acc.stockCattleEnd = stockAt('cattle', y + '-12-31');
+  acc.stockSheepEnd = stockAt('sheep', y + '-12-31');
+  return acc;
+}
+
+/* 某月/某年的支出按类别汇总(环形图用) */
+function expenseByCategory(ymOrNull, year) {
+  const map = {};
+  state.transactions.forEach(t => {
+    if (t.type !== 'expense') return;
+    if (ymOrNull) {
+      if (t.date.slice(0, 7) !== ymOrNull) return;
+    } else if (t.date.slice(0, 4) !== year) {
+      return;
+    }
+    map[t.category] = (map[t.category] || 0) + t.amount;
+  });
+  return map;
+}
+
+/* 有记录的年份列表(倒序),统计页年份切换用 */
+function yearList() {
+  const set = new Set();
+  state.transactions.forEach(t => set.add(t.date.slice(0, 4)));
+  state.stockEvents.forEach(e => set.add(e.date.slice(0, 4)));
+  set.add(String(new Date().getFullYear()));
+  return Array.from(set).sort().reverse();
+}
+/* ==================== 六、SVG 图表(原生手绘,零依赖) ==================== */
+const CHART_MIN_W = 700;   // 手机端横向滚动,桌面完整显示
+const CHART_H = 300;
+const CHART_M = { top: 30, right: 16, bottom: 38, left: 68 };
+
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const unit = Math.pow(10, Math.floor(Math.log10(v)));
+  const cands = [1, 2, 5, 10].map(x => x * unit);
+  for (const c of cands) if (v <= c) return c;
+  return 10 * unit;
+}
+
+function svgText(x, y, s, opts) {
+  opts = opts || {};
+  const size = opts.size || 13, weight = opts.weight || 600;
+  const anchor = opts.anchor || 'middle', fill = opts.fill || COLORS.ink;
+  const dy = opts.dy ? ' dy="' + opts.dy + '"' : '';
+  return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" font-weight="' + weight +
+         '" text-anchor="' + anchor + '" fill="' + fill + '"' + dy + '>' + esc(s) + '</text>';
+}
+
+function emptyChartHtml() {
+  return '<div class="chart-empty">暂无数据,先去「记一笔」📝</div>';
+}
+
+function chartBox(container, dataEmpty) {
+  if (dataEmpty) { container.innerHTML = emptyChartHtml(); return null; }
+  const w = Math.max(CHART_MIN_W, Math.floor(container.getBoundingClientRect().width));
+  const m = CHART_M, h = CHART_H;
+  return { w: w, h: h, m: m, plotW: w - m.left - m.right, plotH: h - m.top - m.bottom };
+}
+
+/* 顶部圆角、底部方角的柱 path */
+function barPath(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h);
+  return 'M' + x + ',' + (y + r) +
+         ' Q' + x + ',' + y + ' ' + (x + r) + ',' + y +
+         ' L' + (x + w - r) + ',' + y +
+         ' Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) +
+         ' L' + (x + w) + ',' + (y + h) +
+         ' L' + x + ',' + (y + h) + ' Z';
+}
+
+function tipRow(color, label, value) {
+  return '<div class="tt-row"><span class="tt-dot" style="background:' + color + '"></span>' +
+         esc(label) + ': <b>' + esc(value) + '</b></div>';
+}
+
+/* ----- 柱状图:月度收支 ----- */
+function renderBarChart(container, data) {
+  const labels = data.labels, income = data.income, expense = data.expense;
+  const allZero = income.every(v => v === 0) && expense.every(v => v === 0);
+  const box = chartBox(container, allZero);
+  if (!box) return;
+  const { w, h, m, plotW, plotH } = box;
+  const nice = niceMax(Math.max(Math.max.apply(null, income), Math.max.apply(null, expense)));
+
+  let s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
+          '" viewBox="0 0 ' + w + ' ' + h + '" style="overflow:visible">';
+  /* Y 轴网格线 + 刻度(0 → niceMax,4 段 5 刻度) */
+  for (let i = 0; i <= 4; i++) {
+    const v = nice * i / 4;
+    const y = m.top + plotH - plotH * i / 4;
+    s += '<line x1="' + m.left + '" y1="' + y + '" x2="' + (m.left + plotW) + '" y2="' + y +
+         '" stroke="' + COLORS.gridline + '" stroke-width="1"/>';
+    s += svgText(m.left - 10, y, fmtCompact(v), { size: 13, anchor: 'end', dy: 5 });
+  }
+
+  const groupW = plotW / 12;
+  const barW = Math.min(30, groupW * 0.4);
+  const gap = 2;
+  const labelAll = barW >= 30;
+  /* 直接标签:柱够宽时全标;否则只标两根最大柱 */
+  const maxIncomeIdx = income.indexOf(Math.max.apply(null, income));
+  const maxExpenseIdx = expense.indexOf(Math.max.apply(null, expense));
+  const series = [
+    { vals: income, color: COLORS.income, labelIdx: maxIncomeIdx },
+    { vals: expense, color: COLORS.expense, labelIdx: maxExpenseIdx }
+  ];
+
+  series.forEach((ser, si) => {
+    ser.vals.forEach((v, i) => {
+      if (v === 0) return;
+      const x = m.left + i * groupW + (groupW - barW * 2 - gap) / 2 + si * (barW + gap);
+      const bh = v / nice * plotH;
+      const y = m.top + plotH - bh;
+      s += '<path d="' + barPath(x, y, barW, bh, 4) + '" fill="' + ser.color + '"/>';
+      const tip = tipRow(ser.color, si === 0 ? '收入' : '支出', fmtMoney(v)) +
+                  '<div class="tt-row" style="margin-top:2px;opacity:.75">' + esc(labels[i]) + '</div>';
+      s += '<rect class="ch-hit" x="' + (x - 3) + '" y="' + m.top + '" width="' + (barW + 6) +
+           '" height="' + plotH + '" fill="rgba(0,0,0,0)" data-tip="' + esc(tip) + '"/>';
+      if ((labelAll && v > 0) || (!labelAll && i === ser.labelIdx && v > 0)) {
+        s += svgText(x + barW / 2, y - 7, fmtCompact(v), { size: 12, dy: 0 });
+      }
+    });
+  });
+
+  /* X 轴标签 */
+  for (let i = 0; i < 12; i++) {
+    s += svgText(m.left + i * groupW + groupW / 2, h - 10, labels[i], { size: 13 });
+  }
+  s += '</svg>';
+  container.innerHTML = s;
+}
+
+/* ----- 折线图:月末存栏趋势 ----- */
+function renderLineChart(container, data) {
+  const labels = data.labels, cattle = data.cattle, sheep = data.sheep;
+  const allZero = cattle.every(v => v === 0) && sheep.every(v => v === 0);
+  const box = chartBox(container, allZero);
+  if (!box) return;
+  const { w, h, m, plotW, plotH } = box;
+  const nice = niceMax(Math.max(Math.max.apply(null, cattle), Math.max.apply(null, sheep)));
+
+  let s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
+          '" viewBox="0 0 ' + w + ' ' + h + '" style="overflow:visible">';
+  for (let i = 0; i <= 4; i++) {
+    const v = nice * i / 4;
+    const y = m.top + plotH - plotH * i / 4;
+    s += '<line x1="' + m.left + '" y1="' + y + '" x2="' + (m.left + plotW) + '" y2="' + y +
+         '" stroke="' + COLORS.gridline + '" stroke-width="1"/>';
+    s += svgText(m.left - 10, y, fmtCompact(v), { size: 13, anchor: 'end', dy: 5 });
+  }
+
+  const groupW = plotW / 12;
+  const series = [
+    { vals: cattle, color: COLORS.cattle, name: '牛' },
+    { vals: sheep, color: COLORS.sheep, name: '羊' }
+  ];
+
+  series.forEach(ser => {
+    const pts = ser.vals.map((v, i) => ({
+      x: m.left + i * groupW + groupW / 2,
+      y: m.top + plotH - (v || 0) / nice * plotH
+    }));
+    /* 折线 + 端点(2px 画布色环) */
+    s += '<polyline points="' + pts.map(p => p.x + ',' + p.y).join(' ') +
+         '" fill="none" stroke="' + ser.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    pts.forEach(p => {
+      s += '<circle cx="' + p.x + '" cy="' + p.y + '" r="4.5" fill="' + ser.color + '"/>';
+      s += '<circle cx="' + p.x + '" cy="' + p.y + '" r="4.5" fill="none" stroke="' + COLORS.chartbg + '" stroke-width="2"/>';
+    });
+    /* 末点直接标注 */
+    const last = pts[11];
+    const isCattle = ser === series[0];
+    const lx = Math.min(Math.max(last.x, m.left + 30), w - 40);
+    s += '<circle cx="' + lx + '" cy="' + (last.y + (isCattle ? -20 : 26)) + '" r="4" fill="' + ser.color + '"/>';
+    s += svgText(lx + 8, last.y + (isCattle ? -20 : 26), ser.name + ' ' + ser.vals[11],
+                 { size: 14, weight: 700, anchor: 'start', dy: 5 });
+  });
+
+  /* 悬停列参考线 + 命中区(后绘制,在上层接收事件) */
+  for (let i = 0; i < 12; i++) {
+    const x = m.left + i * groupW + groupW / 2;
+    s += '<line class="g-guide" data-guide="' + i + '" x1="' + x + '" y1="' + m.top +
+         '" x2="' + x + '" y2="' + (m.top + plotH) + '" stroke="#b9b8b0" stroke-width="1" opacity="0"/>';
+    const tip = tipRow(COLORS.cattle, '牛存栏', cattle[i] + ' 头') +
+                tipRow(COLORS.sheep, '羊存栏', sheep[i] + ' 只') +
+                '<div class="tt-row" style="margin-top:2px;opacity:.75">' + esc(labels[i]) + '</div>';
+    s += '<rect class="ch-hit" x="' + (m.left + i * groupW) + '" y="' + m.top + '" width="' + groupW +
+         '" height="' + plotH + '" fill="rgba(0,0,0,0)" data-tip="' + esc(tip) + '" data-col="' + i + '"/>';
+  }
+
+  for (let i = 0; i < 12; i++) {
+    s += svgText(m.left + i * groupW + groupW / 2, h - 10, labels[i], { size: 13 });
+  }
+  s += '</svg>';
+  container.innerHTML = s;
+}
+
+/* ----- 环形图:支出构成 ----- */
+function renderDonutChart(container, data) {
+  if (!data.items.length) { container.innerHTML = emptyChartHtml(); return; }
+  const items = data.items.slice().sort((a, b) => b.value - a.value);
+  const cw = Math.floor(container.getBoundingClientRect().width);
+  const d = Math.min(Math.max(cw - 24, 240), 320);
+  const w = Math.max(cw, 280), h = d + 24;
+  const cx = w / 2, cy = h / 2;
+  const strokeW = Math.max(44, d * 0.17);
+  const r = d / 2 - strokeW / 2 - 4;
+  const C = 2 * Math.PI * r;
+  const total = data.total;
+
+  let s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h +
+          '" viewBox="0 0 ' + w + ' ' + h + '" style="overflow:visible">';
+  let acc = 0;
+  items.forEach(it => {
+    const share = total > 0 ? it.value / total : 0;
+    const segLen = Math.max(C * share - 2, 2);   // 每段间留 2px 画布色间隙
+    const dash = segLen + ' ' + (C - segLen);
+    const off = -acc;
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + it.color +
+         '" stroke-width="' + strokeW + '" stroke-dasharray="' + dash + '" stroke-dashoffset="' + off + '"/>';
+    acc += C * share;
+  });
+  /* 透明命中段(加粗,便于点击) */
+  acc = 0;
+  items.forEach(it => {
+    const share = total > 0 ? it.value / total : 0;
+    const segLen = Math.max(C * share - 2, 2);
+    const tip = tipRow(it.color, it.name, fmtMoney(it.value)) +
+                '<div class="tt-row" style="margin-top:2px;opacity:.75">占 ' +
+                (share * 100).toFixed(1) + '%</div>';
+    s += '<circle class="ch-hit" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(0,0,0,0)"' +
+         ' stroke-width="' + (strokeW + 10) + '" stroke-dasharray="' + segLen + ' ' + (C - segLen) +
+         '" stroke-dashoffset="' + (-acc) + '" pointer-events="stroke" data-tip="' + esc(tip) + '"/>';
+    acc += C * share;
+  });
+  /* 圆心总额 */
+  s += svgText(cx, cy - 4, '总支出', { size: 15, fill: COLORS.ink });
+  s += svgText(cx, cy + 24, fmtMoney(total), { size: 20, weight: 800, dy: 0 });
+  s += '</svg>';
+  container.innerHTML = s;
+}
+
+/* ----- tooltip 与悬停交互(事件委托) ----- */
+function moveTooltip(e) {
+  const tip = document.getElementById('chart-tooltip');
+  const pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + w > window.innerWidth - pad) x = e.clientX - w - 14;
+  if (y + h > window.innerHeight - pad) y = e.clientY - h - 14;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+
+function initChartInteraction() {
+  const tip = document.getElementById('chart-tooltip');
+  document.addEventListener('pointerover', function (e) {
+    const hit = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (!hit) return;
+    tip.innerHTML = hit.getAttribute('data-tip');
+    tip.classList.add('show');
+    moveTooltip(e);
+    const col = hit.getAttribute('data-col');
+    if (col !== null && hit.closest('.chart-box')) {
+      hit.closest('.chart-box').querySelectorAll('.g-guide[data-guide="' + col + '"]')
+        .forEach(g => g.setAttribute('opacity', '1'));
+    }
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (tip.classList.contains('show')) moveTooltip(e);
+  });
+  document.addEventListener('pointerout', function (e) {
+    const hit = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (!hit) return;
+    tip.classList.remove('show');
+    if (hit.closest('.chart-box')) {
+      hit.closest('.chart-box').querySelectorAll('.g-guide').forEach(g => g.setAttribute('opacity', '0'));
+    }
+  });
+}
+
+/* 窗口缩放防抖重绘统计图表 */
+let resizeTimer = null;
+window.addEventListener('resize', function () {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function () {
+    if (typeof currentView !== 'undefined' && currentView === 'stats') renderStats();
+  }, 200);
+});
+/* ==================== 七、视图渲染 ==================== */
+let currentView = 'dashboard';
+
+/* toast 提示 */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2200);
+}
+
+function sortByDateDesc(a, b) {
+  if (a.date !== b.date) return b.date.localeCompare(a.date);
+  return b.id > a.id ? 1 : -1;
+}
+
+function fmtSigned(n, isIncome) {
+  return (isIncome ? '+' : '-') + fmtMoney(Math.abs(n)).slice(1);
+}
+
+function attributionBadge(attr) {
+  const cls = 'badge badge-' + attr;
+  const icons = { cattle: '🐂', sheep: '🐑', shared: '🤝' };
+  return '<span class="' + cls + '">' + icons[attr] + ' ' + ATTRIBUTION_NAMES[attr] + '</span>';
+}
+
+/* ---------- 概览 ---------- */
+function renderDashboard() {
+  document.getElementById('dash-cattle').textContent = currentStock('cattle');
+  document.getElementById('dash-sheep').textContent = currentStock('sheep');
+
+  const now = new Date();
+  const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const ms = monthSummary(ym);
+  document.getElementById('dash-income').textContent = fmtMoney(ms.incomeTotal);
+  document.getElementById('dash-expense').textContent = fmtMoney(ms.expenseTotal);
+  const profitEl = document.getElementById('dash-profit');
+  profitEl.textContent = fmtMoney(ms.profitTotal);
+  profitEl.parentElement.classList.toggle('k-loss', ms.profitTotal < 0);
+  profitEl.parentElement.querySelector('.k-label').textContent = ms.profitTotal < 0 ? '本月亏损 📉' : '本月利润 📈';
+
+  /* 最近 5 条收支 */
+  const recentTx = state.transactions.slice().sort(sortByDateDesc).slice(0, 5);
+  document.getElementById('dash-recent-tx').innerHTML = recentTx.length
+    ? recentTx.map(function (t) {
+        return '<li class="rec-item">' +
+          '<span class="rec-date">' + esc(t.date) + '</span>' +
+          '<div class="rec-main"><div class="rec-title">' + esc(catName(t.type, t.category)) +
+          ' ' + attributionBadge(t.attribution) + '</div>' +
+          (t.note ? '<div class="rec-note">' + esc(t.note) + '</div>' : '') + '</div>' +
+          '<span class="rec-amount ' + (t.type === 'income' ? 'in' : 'out') + '">' +
+          fmtSigned(t.amount, t.type === 'income') + '</span></li>';
+      }).join('')
+    : '<li class="empty-tip">还没有收支记录,去「记一笔」吧 ✍️</li>';
+
+  /* 最近 5 条数量变动 */
+  const recentSt = state.stockEvents.slice().sort(sortByDateDesc).slice(0, 5);
+  document.getElementById('dash-recent-stock').innerHTML = recentSt.length
+    ? recentSt.map(function (e) {
+        const sign = STOCK_CHANGE_TYPES[e.changeType].sign;
+        const color = sign > 0 ? COLORS.income : COLORS.expense;
+        return '<li class="rec-item">' +
+          '<span class="rec-date">' + esc(e.date) + '</span>' +
+          '<div class="rec-main"><div class="rec-title">' +
+          (e.species === 'cattle' ? '🐂 牛' : '🐑 羊') + ' · ' + STOCK_CHANGE_TYPES[e.changeType].name +
+          ' <b style="color:' + color + '">' + (sign > 0 ? '+' : '−') + e.quantity + '</b></div>' +
+          (e.note ? '<div class="rec-note">' + esc(e.note) + '</div>' : '') + '</div></li>';
+      }).join('')
+    : '<li class="empty-tip">还没有数量记录,去「记一笔」吧 ✍️</li>';
+
+  /* 备份提醒:距上次备份超 30 天 */
+  const remind = document.getElementById('backup-reminder');
+  const lb = state.settings.lastBackupAt;
+  if (lb) {
+    const days = Math.floor((Date.now() - new Date(lb + 'T00:00:00')) / 86400000);
+    remind.classList.toggle('hidden', days <= 30);
+  } else {
+    remind.classList.add('hidden');
+  }
+}
+
+/* ---------- 记一笔 ---------- */
+const entryState = {
+  seg: 'money',
+  txType: 'expense',
+  txCategory: 'feed',
+  txAttr: 'shared',
+  stSpecies: 'cattle',
+  stType: 'buy'
+};
+
+function renderEntry() {
+  const segBtns = document.querySelectorAll('#entry-seg button');
+  segBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.seg === entryState.seg); });
+  document.getElementById('entry-money').classList.toggle('hidden', entryState.seg !== 'money');
+  document.getElementById('entry-stock').classList.toggle('hidden', entryState.seg !== 'stock');
+
+  const today = todayStr();
+  const txDate = document.getElementById('tx-date');
+  if (!txDate.value) txDate.value = today;
+  const stDate = document.getElementById('st-date');
+  if (!stDate.value) stDate.value = today;
+
+  /* 收/支按钮 */
+  document.querySelectorAll('#entry-money .opt[data-tx]').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.tx === entryState.txType);
+  });
+
+  /* 类别按钮(随收/支切换,选中态明显) */
+  const catBox = document.getElementById('tx-cats');
+  catBox.innerHTML = CATEGORIES[entryState.txType].map(function (c) {
+    const active = c.id === entryState.txCategory ? ' active' : '';
+    return '<button class="opt' + active + '" data-cat="' + c.id + '">' + esc(c.name) + '</button>';
+  }).join('');
+
+  /* 归属按钮 */
+  document.querySelectorAll('#tx-attrs .opt').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.attr === entryState.txAttr);
+  });
+
+  /* 数量面板 */
+  document.querySelectorAll('#entry-stock .opt[data-species]').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.species === entryState.stSpecies);
+  });
+  document.querySelectorAll('#st-types .opt').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.st === entryState.stType);
+  });
+}
+
+/* 保存收支 */
+function saveTransaction() {
+  const date = document.getElementById('tx-date').value;
+  const amountRaw = document.getElementById('tx-amount').value.trim();
+  const note = document.getElementById('tx-note').value.trim();
+  if (!isValidDate(date)) { toast('请选择日期'); return; }
+  const amount = Number(amountRaw);
+  if (!amountRaw || isNaN(amount) || amount <= 0) { toast('请填写正确的金额(大于 0)'); return; }
+  if (amount > 999999999) { toast('金额太大了'); return; }
+  addTransaction({
+    id: createId('t'),
+    type: entryState.txType,
+    date: date,
+    category: entryState.txCategory,
+    amount: round2(amount),
+    attribution: entryState.txAttr,
+    note: note
+  });
+  toast('已保存 ✅');
+  document.getElementById('tx-amount').value = '';
+  document.getElementById('tx-note').value = '';
+  renderCurrentView();
+}
+
+/* 保存数量变动 */
+function saveStockEvent() {
+  const date = document.getElementById('st-date').value;
+  const qtyRaw = document.getElementById('st-qty').value.trim();
+  const note = document.getElementById('st-note').value.trim();
+  if (!isValidDate(date)) { toast('请选择日期'); return; }
+  const qty = Number(qtyRaw);
+  if (!qtyRaw || !Number.isInteger(qty) || qty < 1 || qty > 9999) { toast('请填写正确的数量(1~9999 的整数)'); return; }
+  addStockEvent({
+    id: createId('s'),
+    date: date,
+    species: entryState.stSpecies,
+    changeType: entryState.stType,
+    quantity: qty,
+    note: note
+  });
+  toast('已保存 ✅');
+  document.getElementById('st-qty').value = '';
+  document.getElementById('st-note').value = '';
+  renderCurrentView();
+}
+
+/* ---------- 记录页 ---------- */
+const recordsState = { seg: 'tx', month: 'all' };
+
+function renderRecords() {
+  document.querySelectorAll('#records-seg button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.rseg === recordsState.seg);
+  });
+
+  /* 月份下拉:全部 + 有记录的月份 */
+  const months = monthList();
+  if (recordsState.month !== 'all' && months.indexOf(recordsState.month) === -1) recordsState.month = 'all';
+  const sel = document.getElementById('rec-month-filter');
+  sel.innerHTML = '<option value="all">全部月份</option>' +
+    months.map(function (ym) {
+      return '<option value="' + ym + '"' + (ym === recordsState.month ? ' selected' : '') + '>' +
+             ymLabel(ym) + '</option>';
+    }).join('');
+
+  const inMonth = function (d) { return recordsState.month === 'all' || d.slice(0, 7) === recordsState.month; };
+  const listEl = document.getElementById('rec-list');
+  const sumEl = document.getElementById('rec-sum');
+
+  if (recordsState.seg === 'tx') {
+    const txs = state.transactions.filter(function (t) { return inMonth(t.date); }).sort(sortByDateDesc);
+    let incomeSum = 0, expenseSum = 0;
+    txs.forEach(function (t) {
+      if (t.type === 'income') incomeSum += t.amount; else expenseSum += t.amount;
+    });
+    sumEl.innerHTML = '<div class="sum-row"><span>共 ' + txs.length + ' 笔</span>' +
+      '<span>收入 <span class="sum-in">' + fmtMoney(incomeSum) + '</span></span>' +
+      '<span>支出 <span class="sum-out">' + fmtMoney(expenseSum) + '</span></span>' +
+      '<span>结余 <span class="sum-net">' + fmtMoney(round2(incomeSum - expenseSum)) + '</span></span></div>';
+    listEl.innerHTML = txs.length
+      ? txs.map(function (t) {
+          return '<li class="rec-item">' +
+            '<span class="rec-date">' + esc(t.date) + '</span>' +
+            '<div class="rec-main"><div class="rec-title">' + esc(catName(t.type, t.category)) +
+            ' ' + attributionBadge(t.attribution) + '</div>' +
+            (t.note ? '<div class="rec-note">' + esc(t.note) + '</div>' : '') + '</div>' +
+            '<span class="rec-amount ' + (t.type === 'income' ? 'in' : 'out') + '">' +
+            fmtSigned(t.amount, t.type === 'income') + '</span>' +
+            '<button class="rec-del" data-del="' + t.id + '" data-kind="tx" title="删除">🗑️</button></li>';
+        }).join('')
+      : '<li class="empty-tip">这个月还没有收支记录 📭</li>';
+  } else {
+    const evs = state.stockEvents.filter(function (e) { return inMonth(e.date); }).sort(sortByDateDesc);
+    let buySum = 0, saleSum = 0, cattleSum = 0, sheepSum = 0;
+    evs.forEach(function (e) {
+      const sign = STOCK_CHANGE_TYPES[e.changeType].sign;
+      if (sign > 0) buySum += e.quantity; else saleSum += e.quantity;
+      if (e.species === 'cattle') cattleSum += sign * e.quantity; else sheepSum += sign * e.quantity;
+    });
+    sumEl.innerHTML = '<div class="sum-row"><span>共 ' + evs.length + ' 条</span>' +
+      '<span>增加 <span class="sum-in">+' + buySum + '</span></span>' +
+      '<span>减少 <span class="sum-out">−' + saleSum + '</span></span>' +
+      '<span>净变化:🐂 <b style="color:' + COLORS.cattle + '">' + (cattleSum >= 0 ? '+' : '') + cattleSum + '</b> · ' +
+      '🐑 <b style="color:' + COLORS.sheep + '">' + (sheepSum >= 0 ? '+' : '') + sheepSum + '</b></span></div>';
+    listEl.innerHTML = evs.length
+      ? evs.map(function (e) {
+          const sign = STOCK_CHANGE_TYPES[e.changeType].sign;
+          const color = sign > 0 ? COLORS.income : COLORS.expense;
+          return '<li class="rec-item">' +
+            '<span class="rec-date">' + esc(e.date) + '</span>' +
+            '<div class="rec-main"><div class="rec-title">' +
+            (e.species === 'cattle' ? '🐂 牛' : '🐑 羊') + ' · ' + STOCK_CHANGE_TYPES[e.changeType].name +
+            ' <b style="color:' + color + '">' + (sign > 0 ? '+' : '−') + e.quantity + '</b></div>' +
+            (e.note ? '<div class="rec-note">' + esc(e.note) + '</div>' : '') + '</div>' +
+            '<button class="rec-del" data-del="' + e.id + '" data-kind="st" title="删除">🗑️</button></li>';
+        }).join('')
+      : '<li class="empty-tip">这个月还没有数量记录 📭</li>';
+  }
+}
+
+/* ---------- 统计页 ---------- */
+const statsState = (function () {
+  const now = new Date();
+  return { mode: 'month', year: now.getFullYear(), month: now.getMonth() + 1 };
+})();
+
+function renderStatsKpi(s, labelPrefix) {
+  document.getElementById('stats-kpi-row').innerHTML =
+    '<div class="kpi k-income"><div class="k-label">' + labelPrefix + '收入 💰</div>' +
+    '<div class="k-value">' + fmtMoney(s.incomeTotal) + '</div></div>' +
+    '<div class="kpi k-expense"><div class="k-label">' + labelPrefix + '支出 💸</div>' +
+    '<div class="k-value">' + fmtMoney(s.expenseTotal) + '</div></div>' +
+    '<div class="kpi ' + (s.profitTotal < 0 ? 'k-loss' : 'k-profit') + '"><div class="k-label">' +
+    labelPrefix + (s.profitTotal < 0 ? '亏损 📉' : '利润 📈') + '</div>' +
+    '<div class="k-value">' + fmtMoney(s.profitTotal) + '</div></div>';
+}
+
+function barTableHtml(labels, income, expense) {
+  let s = '<table class="data"><tr><th>月份</th><th>收入</th><th>支出</th><th>结余</th></tr>';
+  let ti = 0, te = 0;
+  for (let i = 0; i < 12; i++) {
+    ti += income[i]; te += expense[i];
+    s += '<tr><td>' + labels[i] + '</td><td>' + fmtMoney(income[i]) + '</td><td>' +
+         fmtMoney(expense[i]) + '</td><td class="' + (income[i] - expense[i] >= 0 ? 'td-pos' : 'td-neg') +
+         '">' + fmtMoney(round2(income[i] - expense[i])) + '</td></tr>';
+  }
+  s += '<tfoot><tr><td>全年合计</td><td>' + fmtMoney(ti) + '</td><td>' + fmtMoney(te) + '</td><td class="' +
+       (ti - te >= 0 ? 'td-pos' : 'td-neg') + '">' + fmtMoney(round2(ti - te)) + '</td></tr></tfoot></table>';
+  return s;
+}
+
+function lineTableHtml(labels, cattle, sheep) {
+  let s = '<table class="data"><tr><th>月份</th><th>🐂 牛存栏</th><th>🐑 羊存栏</th><th>合计</th></tr>';
+  for (let i = 0; i < 12; i++) {
+    s += '<tr><td>' + labels[i] + '</td><td>' + cattle[i] + '</td><td>' + sheep[i] + '</td><td>' +
+         (cattle[i] + sheep[i]) + '</td></tr>';
+  }
+  s += '</table>';
+  return s;
+}
+
+function donutTableHtml(items, total) {
+  let s = '<table class="data"><tr><th>类别</th><th>金额</th><th>占比</th></tr>';
+  items.forEach(function (it) {
+    const pct = total > 0 ? (it.value / total * 100).toFixed(1) : '0.0';
+    s += '<tr><td>' + esc(it.name) + '</td><td>' + fmtMoney(it.value) + '</td><td>' + pct + '%</td></tr>';
+  });
+  s += '<tfoot><tr><td>合计</td><td>' + fmtMoney(total) + '</td><td>100%</td></tr></tfoot></table>';
+  return s;
+}
+
+/* 分牛/羊利润表(月、年汇总对象字段兼容) */
+function profitTableHtml(s) {
+  const sharedOut = s.expenseShared > 0 ? '<span class="td-neg">−' + fmtMoney(s.expenseShared).slice(1) + '</span>' : '—';
+  const unalloc = s.unallocatedShared > 0 ? '<span class="td-neg">未分摊 ' + fmtMoney(s.unallocatedShared) + '</span>' : '—';
+  const cls = function (v) { return v >= 0 ? 'td-pos' : 'td-neg'; };
+  return '<table class="data">' +
+    '<tr><th>项目</th><th>收入</th><th>支出</th><th>摊共用支出</th><th>利润</th><th>月末存栏</th></tr>' +
+    '<tr><td>🐂 牛</td><td>' + fmtMoney(s.incomeCattle) + '</td><td>' + fmtMoney(s.expenseCattle) + '</td>' +
+    '<td>' + fmtMoney(s.cattleShare) + '</td><td class="' + cls(s.cattleProfit) + '">' + fmtMoney(s.cattleProfit) +
+    '</td><td>' + s.stockCattleEnd + ' 头</td></tr>' +
+    '<tr><td>🐑 羊</td><td>' + fmtMoney(s.incomeSheep) + '</td><td>' + fmtMoney(s.expenseSheep) + '</td>' +
+    '<td>' + fmtMoney(s.sheepShare) + '</td><td class="' + cls(s.sheepProfit) + '">' + fmtMoney(s.sheepProfit) +
+    '</td><td>' + s.stockSheepEnd + ' 只</td></tr>' +
+    '<tr><td>🤝 共用</td><td>' + fmtMoney(s.incomeShared) + '</td><td>—</td><td>' + sharedOut + '</td>' +
+    '<td>' + unalloc + '</td><td>—</td></tr>' +
+    '<tfoot><tr><td>合计</td><td>' + fmtMoney(s.incomeTotal) + '</td><td>' + fmtMoney(s.expenseTotal) + '</td>' +
+    '<td>0.00</td><td class="' + cls(s.profitTotal) + '">' + fmtMoney(s.profitTotal) + '</td><td>—</td></tr></tfoot></table>';
+}
+
+function allocNoteHtml(s, isMonth) {
+  const period = isMonth ? '本月' : '全年';
+  if (s.expenseShared <= 0) {
+    return '说明:' + period + '没有"共用"支出,牛和羊的利润 = 各自的收入 − 各自的支出。';
+  }
+  if (s.unallocatedShared > 0) {
+    return '说明:' + period + '共用支出 ' + fmtMoney(s.expenseShared) + ' 元,但' +
+           (isMonth ? '月底' : '年末') + '没有存栏,无法按比例分摊,列为"未分摊"。';
+  }
+  return '说明:' + period + '共用支出 ' + fmtMoney(s.expenseShared) + ' 元,按' +
+         (isMonth ? '当月月末' : '各月月末') + '存栏比例分摊 → 牛摊 ' + fmtMoney(s.cattleShare) +
+         ' 元、羊摊 ' + fmtMoney(s.sheepShare) + ' 元。(例:月底牛 10 头、羊 20 只,共用支出 300 元,牛摊 100、羊摊 200)';
+}
+
+function renderStats() {
+  const mode = statsState.mode;
+  const y = String(statsState.year);
+  document.querySelectorAll('#stats-mode-seg button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  document.getElementById('stats-year-label').textContent = statsState.year + ' 年';
+  const monthCtl = document.getElementById('stats-month-ctl');
+  monthCtl.classList.toggle('hidden', mode !== 'month');
+  if (mode === 'month') {
+    document.getElementById('stats-month-label').textContent = statsState.month + ' 月';
+  }
+
+  const ym = mode === 'month' ? y + '-' + String(statsState.month).padStart(2, '0') : null;
+  const summary = mode === 'month' ? monthSummary(ym) : yearSummary(y);
+  renderStatsKpi(summary, mode === 'month' ? '本月' : '全年');
+
+  /* 柱状图/折线图:始终画所选年份 12 个月 */
+  const labels = [], incomeArr = [], expenseArr = [], cattleArr = [], sheepArr = [];
+  for (let m = 1; m <= 12; m++) {
+    const mYm = y + '-' + String(m).padStart(2, '0');
+    labels.push(m + '月');
+    const ms = monthSummary(mYm);
+    incomeArr.push(ms.incomeTotal);
+    expenseArr.push(ms.expenseTotal);
+    cattleArr.push(ms.stockCattleEnd);
+    sheepArr.push(ms.stockSheepEnd);
+  }
+  document.getElementById('bar-legend').innerHTML =
+    '<span class="lg-item"><span class="lg-dot" style="background:' + COLORS.income + '"></span>收入</span>' +
+    '<span class="lg-item"><span class="lg-dot" style="background:' + COLORS.expense + '"></span>支出</span>';
+  renderBarChart(document.getElementById('bar-chart'), { labels: labels, income: incomeArr, expense: expenseArr });
+  document.getElementById('bar-table').innerHTML = barTableHtml(labels, incomeArr, expenseArr);
+
+  document.getElementById('line-legend').innerHTML =
+    '<span class="lg-item"><span class="lg-line" style="background:' + COLORS.cattle + '"></span>牛存栏</span>' +
+    '<span class="lg-item"><span class="lg-line" style="background:' + COLORS.sheep + '"></span>羊存栏</span>';
+  renderLineChart(document.getElementById('line-chart'), { labels: labels, cattle: cattleArr, sheep: sheepArr });
+  document.getElementById('line-table').innerHTML = lineTableHtml(labels, cattleArr, sheepArr);
+
+  /* 环形图 + 利润表:按月看所选月,按年看全年 */
+  const catMap = expenseByCategory(ym, y);
+  const items = Object.keys(catMap).map(function (id) {
+    return { id: id, name: catName('expense', id), value: catMap[id], color: EXPENSE_CAT_COLORS[id] || COLORS.ink };
+  }).sort(function (a, b) { return b.value - a.value; });
+  const totalExpense = items.reduce(function (s, i) { return s + i.value; }, 0);
+  document.getElementById('donut-legend').innerHTML = items.map(function (it) {
+    const pct = totalExpense > 0 ? (it.value / totalExpense * 100).toFixed(1) : '0.0';
+    return '<span class="lg-item"><span class="lg-dot" style="background:' + it.color + '"></span>' +
+           esc(it.name) + ' ' + fmtMoney(it.value) + '(' + pct + '%)</span>';
+  }).join('');
+  renderDonutChart(document.getElementById('donut-chart'), { items: items, total: totalExpense });
+  document.getElementById('donut-table').innerHTML = donutTableHtml(items, totalExpense);
+
+  document.getElementById('profit-table').innerHTML = profitTableHtml(summary);
+  document.getElementById('alloc-note').textContent = allocNoteHtml(summary, mode === 'month');
+}
+
+/* ---------- 设置页 ---------- */
+function renderSettings() {
+  const lb = state.settings.lastBackupAt;
+  document.getElementById('last-backup-label').textContent = lb
+    ? '上次备份:' + lb + '。建议每月备份一次,存到手机或网盘'
+    : '把全部数据存成一个文件,建议每月备份一次,存到手机或网盘';
+}
+
+/* ---------- 导航 ---------- */
+function showView(name) {
+  currentView = name;
+  document.querySelectorAll('.view').forEach(function (v) {
+    v.classList.toggle('active', v.id === 'view-' + name);
+  });
+  document.querySelectorAll('.nav-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.view === name);
+  });
+  renderCurrentView();
+  window.scrollTo(0, 0);
+}
+
+function renderCurrentView() {
+  if (currentView === 'dashboard') renderDashboard();
+  else if (currentView === 'entry') renderEntry();
+  else if (currentView === 'records') renderRecords();
+  else if (currentView === 'stats') renderStats();
+  else if (currentView === 'settings') renderSettings();
+}
+
+/* ---------- 事件绑定 ---------- */
+function initEvents() {
+  /* 导航与快捷按钮 */
+  document.querySelectorAll('.nav-btn').forEach(function (b) {
+    b.addEventListener('click', function () { showView(b.dataset.view); });
+  });
+  document.getElementById('quick-expense').addEventListener('click', function () {
+    entryState.seg = 'money'; entryState.txType = 'expense'; showView('entry');
+  });
+  document.getElementById('quick-income').addEventListener('click', function () {
+    entryState.seg = 'money'; entryState.txType = 'income'; showView('entry');
+  });
+  document.getElementById('quick-stock').addEventListener('click', function () {
+    entryState.seg = 'stock'; showView('entry');
+  });
+
+  /* 记一笔 */
+  document.querySelectorAll('#entry-seg button').forEach(function (b) {
+    b.addEventListener('click', function () { entryState.seg = b.dataset.seg; renderEntry(); });
+  });
+  document.querySelectorAll('#entry-money .opt[data-tx]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      entryState.txType = b.dataset.tx;
+      /* 切换收/支后,类别默认选第一个 */
+      entryState.txCategory = CATEGORIES[entryState.txType][0].id;
+      renderEntry();
+    });
+  });
+  document.getElementById('tx-cats').addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-cat]');
+    if (!btn) return;
+    entryState.txCategory = btn.dataset.cat;
+    /* 选类别自动建议归属(可再手动改) */
+    const cat = CATEGORIES[entryState.txType].find(function (c) { return c.id === btn.dataset.cat; });
+    if (cat && cat.suggestAttribution) entryState.txAttr = cat.suggestAttribution;
+    renderEntry();
+  });
+  document.querySelectorAll('#tx-attrs .opt').forEach(function (b) {
+    b.addEventListener('click', function () { entryState.txAttr = b.dataset.attr; renderEntry(); });
+  });
+  document.querySelectorAll('#entry-stock .opt[data-species]').forEach(function (b) {
+    b.addEventListener('click', function () { entryState.stSpecies = b.dataset.species; renderEntry(); });
+  });
+  document.getElementById('st-types').addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-st]');
+    if (!btn) return;
+    entryState.stType = btn.dataset.st;
+    renderEntry();
+  });
+  document.getElementById('tx-save').addEventListener('click', saveTransaction);
+  document.getElementById('st-save').addEventListener('click', saveStockEvent);
+
+  /* 记录页 */
+  document.querySelectorAll('#records-seg button').forEach(function (b) {
+    b.addEventListener('click', function () { recordsState.seg = b.dataset.rseg; renderRecords(); });
+  });
+  document.getElementById('rec-month-filter').addEventListener('change', function (e) {
+    recordsState.month = e.target.value;
+    renderRecords();
+  });
+  document.getElementById('rec-list').addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-del]');
+    if (!btn) return;
+    if (!confirm('确定删除这条记录吗?删除后无法恢复。')) return;
+    if (btn.dataset.kind === 'tx') deleteTransaction(btn.dataset.del);
+    else deleteStockEvent(btn.dataset.del);
+    toast('已删除 🗑️');
+    renderCurrentView();
+  });
+
+  /* 统计页 */
+  document.querySelectorAll('#stats-mode-seg button').forEach(function (b) {
+    b.addEventListener('click', function () { statsState.mode = b.dataset.mode; renderStats(); });
+  });
+  document.getElementById('stats-prev-year').addEventListener('click', function () {
+    statsState.year--; renderStats();
+  });
+  document.getElementById('stats-next-year').addEventListener('click', function () {
+    statsState.year++; renderStats();
+  });
+  document.getElementById('stats-prev-month').addEventListener('click', function () {
+    statsState.month--;
+    if (statsState.month < 1) { statsState.month = 12; statsState.year--; }
+    renderStats();
+  });
+  document.getElementById('stats-next-month').addEventListener('click', function () {
+    statsState.month++;
+    if (statsState.month > 12) { statsState.month = 1; statsState.year++; }
+    renderStats();
+  });
+
+  /* 设置页(备份/导出函数在第八、九区) */
+  document.getElementById('backup-btn').addEventListener('click', downloadBackup);
+  document.getElementById('restore-btn').addEventListener('click', function () {
+    document.getElementById('restore-file').click();
+  });
+  document.getElementById('restore-file').addEventListener('change', onRestoreFile);
+  document.getElementById('export-tx-btn').addEventListener('click', exportTransactionsCsv);
+  document.getElementById('export-st-btn').addEventListener('click', exportStockEventsCsv);
+  document.getElementById('sample-btn').addEventListener('click', fillSampleData);
+  document.getElementById('clear-btn').addEventListener('click', clearAllData);
+  document.getElementById('reminder-backup-btn').addEventListener('click', function () { showView('settings'); });
+}
+
+/* ---------- 初始化 ---------- */
+function init() {
+  initChartInteraction();
+  initEvents();
+  if (!storageOK) showStorageWarning();
+  showView('dashboard');
+}
+init();
+
+/* ---------- PWA:注册 Service Worker ---------- */
+/* 仅在 http(s) 下注册;本地 file:// 双击打开时自动跳过,不影响使用 */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+/* ==================== 八、备份与恢复 ==================== */
+function downloadText(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+function downloadBackup() {
+  state.settings.lastBackupAt = todayStr();
+  saveState();
+  downloadText('养殖记账本_备份_' + todayStr() + '.json', JSON.stringify(state, null, 2), 'application/json');
+  toast('备份已下载 ✅');
+  renderCurrentView();
+}
+
+function onRestoreFile(e) {
+  const file = e.target.files[0];
+  e.target.value = '';   // 允许再次选择同一文件
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function () {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch (err) {
+      toast('❌ 这个文件不是有效的备份文件');
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object' ||
+        !Array.isArray(parsed.transactions) || !Array.isArray(parsed.stockEvents)) {
+      toast('❌ 备份文件内容不对,已取消恢复');
+      return;
+    }
+    const count = parsed.transactions.length + parsed.stockEvents.length;
+    if (!confirm('确定用备份覆盖当前数据吗?\n备份里有 ' + count + ' 条记录。当前数据将被替换。')) return;
+    parsed.settings = Object.assign({ lastBackupAt: todayStr() }, parsed.settings);
+    state = parsed;
+    saveState();
+    toast('备份已恢复 ✅');
+    renderCurrentView();
+  };
+  reader.onerror = function () { toast('❌ 读取文件失败'); };
+  reader.readAsText(file);
+}
+
+/* ==================== 九、CSV 导出(带 BOM,Excel 打开中文不乱码) ==================== */
+function csvEscape(field) {
+  const s = String(field == null ? '' : field);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadCsv(filename, header, rows) {
+  const lines = [header.map(csvEscape).join(',')].concat(
+    rows.map(function (r) { return r.map(csvEscape).join(','); })
+  );
+  downloadText(filename, '﻿' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+function exportTransactionsCsv() {
+  if (!state.transactions.length) { toast('还没有收支记录,先记几笔吧'); return; }
+  const rows = state.transactions.slice().sort(sortByDateDesc).map(function (t) {
+    return [
+      t.date,
+      t.type === 'income' ? '收入' : '支出',
+      catName(t.type, t.category),
+      t.amount.toFixed(2),
+      ATTRIBUTION_NAMES[t.attribution] || t.attribution,
+      t.note
+    ];
+  });
+  downloadCsv('收支记录_' + todayStr() + '.csv',
+    ['日期', '类型', '类别', '金额(元)', '归属', '备注'], rows);
+  toast('收支记录已导出 ✅');
+}
+
+function exportStockEventsCsv() {
+  if (!state.stockEvents.length) { toast('还没有数量记录,先记几笔吧'); return; }
+  const rows = state.stockEvents.slice().sort(sortByDateDesc).map(function (e) {
+    return [
+      e.date,
+      e.species === 'cattle' ? '牛' : '羊',
+      STOCK_CHANGE_TYPES[e.changeType].name,
+      (STOCK_CHANGE_TYPES[e.changeType].sign > 0 ? '+' : '-') + e.quantity,
+      e.note
+    ];
+  });
+  downloadCsv('数量记录_' + todayStr() + '.csv',
+    ['日期', '动物', '变动类型', '数量', '备注'], rows);
+  toast('数量记录已导出 ✅');
+}
+
+/* ---------- 示例数据(练手用) ---------- */
+function fillSampleData() {
+  if (state.transactions.length || state.stockEvents.length) {
+    if (!confirm('当前已有数据,示例数据会混进去。仍然填入吗?')) return;
+  }
+  const y = new Date().getFullYear();
+  const addTx = function (date, type, category, amount, attribution, note) {
+    state.transactions.push({
+      id: createId('t'), type: type, date: date, category: category,
+      amount: amount, attribution: attribution, note: note
+    });
+  };
+  const addSt = function (date, species, changeType, quantity, note) {
+    state.stockEvents.push({
+      id: createId('s'), date: date, species: species,
+      changeType: changeType, quantity: quantity, note: note
+    });
+  };
+  addSt(y + '-01-05', 'cattle', 'buy', 10, '买10头小牛');
+  addSt(y + '-01-05', 'sheep', 'buy', 20, '买20只羊羔');
+  addTx(y + '-01-20', 'income', 'sell_cattle', 5000, 'cattle', '卖出2头育肥牛');
+  addTx(y + '-01-22', 'income', 'sell_sheep', 3000, 'sheep', '卖出10只羊');
+  addTx(y + '-01-25', 'expense', 'feed', 900, 'shared', '玉米饲料500斤');
+  addTx(y + '-01-26', 'expense', 'medicine', 100, 'cattle', '牛疫苗');
+  addTx(y + '-01-28', 'expense', 'labor', 200, 'shared', '帮工工资');
+  addSt(y + '-02-10', 'cattle', 'sale', 2, '卖出2头');
+  addTx(y + '-02-15', 'expense', 'feed', 700, 'shared', '饲料');
+  addSt(y + '-03-03', 'sheep', 'birth', 5, '新出生5只羊羔');
+  saveState();
+  toast('示例数据已填入 🧪');
+  renderCurrentView();
+}
+
+/* ---------- 清空数据 ---------- */
+function clearAllData() {
+  const n = state.transactions.length + state.stockEvents.length;
+  if (!confirm('确定清空所有数据吗?(共 ' + n + ' 条记录)\n此操作不可恢复,建议先下载备份!')) return;
+  state = emptyState();
+  saveState();
+  toast('已清空 🗑️');
+  renderCurrentView();
+}
+</script>
+</body>
+</html>
